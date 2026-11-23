@@ -10,11 +10,22 @@ function App() {
   const sendMessage = () => {
   if (!input.trim()) return
 
-  const userMessage = input
+  const userMessage = input.trim()
 
   const newMessage = {
     text: userMessage,
     sender: "user"
+  }
+
+  // Item IDs are positive integers; reject anything else before calling the API
+  if (!/^\d+$/.test(userMessage)) {
+    setMessages(prev => [
+      ...prev,
+      newMessage,
+      { text: "Please enter a valid numeric item ID (e.g., 37362).", sender: "bot" }
+    ])
+    setInput("")
+    return
   }
 
   setMessages(prev => [
@@ -26,7 +37,15 @@ function App() {
   setInput("")
 
   fetch(`https://v2.xivapi.com/api/sheet/Item/${userMessage}?fields=Name,Description`)
-    .then(response => response.json())
+    .then(response => {
+      if (response.status === 404) {
+        throw new Error("not_found")
+      }
+      if (!response.ok) {
+        throw new Error("api_error")
+      }
+      return response.json()
+    })
     .then(data => {
       const description = data.fields.Description?.trim()
 
@@ -46,14 +65,19 @@ function App() {
         ]
       })
     })
-    .catch(() => {
+    .catch(error => {
+      const errorText =
+        error.message === "not_found"
+          ? `No item found with ID ${userMessage}.`
+          : "Error consulting the XIVAPI."
+
       setMessages(prev => {
         const withoutTyping = prev.filter(msg => !msg.typing)
 
         return [
           ...withoutTyping,
           {
-            text: "Error consulting the XIVAPI.",
+            text: errorText,
             sender: "bot"
           }
         ]
